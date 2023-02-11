@@ -1,0 +1,18 @@
+{
+  "config": {
+    "error": {},
+    "step": {
+      "user": {
+        "title": "Put data for Modbus blinder",
+        "description": "Choose station adding method WAQI, what you preffered: using geographic localization or using station ID",
+        "data": {
+          "name": "Name",
+          "hub_name": "Hub name",
+          "slave": "Unit address",
+          "scan_interval": "Scan interval",
+          "address": "Holding Register of current position"
+        }
+      }
+    }
+  }
+}
