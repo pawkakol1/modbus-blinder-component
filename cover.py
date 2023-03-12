@@ -9,7 +9,7 @@ from typing import Any
 from datetime import datetime
 
 from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -43,11 +43,6 @@ from homeassistant.const import (
     CONF_NAME,
     CONF_SCAN_INTERVAL,
     CONF_SLAVE,
-    STATE_CLOSED,
-    STATE_CLOSING,
-    STATE_OPEN,
-    STATE_OPENING,
-    STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
 
@@ -61,6 +56,7 @@ from .const import (
     COMMAND_OPEN_VALUE,
     COMMAND_CLOSE_VALUE,
     CONF_HUB_NAME,
+    STATE_CONVERT,
     DOMAIN,
     DEFAULT_NAME,
     SW_VERSION,
@@ -68,6 +64,7 @@ from .const import (
     STATE_OPEN_MODBUS_VALUE,
     STATE_OPENING_MODBUS_VALUE,
     STATE_CLOSING_MODBUS_VALUE,
+    STATUS_STATES_ARR,
     TIME_FOR_FIRST_CONNECT_TRY_WITH_HUB_IN_SECONS,
     TIME_FOR_NEXTS_CONNECT_TRIES_WITH_HUB_IN_MINUTES,
 )
@@ -104,8 +101,7 @@ class ModbusBlinderComponentCover(BasePlatform, CoverEntity, RestoreEntity):
     #override
     _attr_supported_features = CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP | CoverEntityFeature.SET_POSITION
     #new attributes
-    _attr_up_down_state: int | None
-    _attr_last_state : None = None
+    _attr_last_state : int = 5
     _attr_setpoint_cover_position: int | None = None
 
 
@@ -113,7 +109,6 @@ class ModbusBlinderComponentCover(BasePlatform, CoverEntity, RestoreEntity):
         super().__init__(hub, config)
 
         #states
-        self._state = None
         self._attr_is_closed = False
 
         #Modbus parameters
@@ -140,17 +135,7 @@ class ModbusBlinderComponentCover(BasePlatform, CoverEntity, RestoreEntity):
             name = self._name
         )
 
-        #additional attributes
-
-
-
-#    @property
-#    def last_state(self) -> int | None:
-#        """Return last known state.
-#
-#        None, opening, closing, open, closed
-#        """
-#        return self._attr_last_state
+    #additional attributes
 
 #    @property
 #    def setpoint_cover_position(self) -> int | None:
@@ -196,41 +181,18 @@ class ModbusBlinderComponentCover(BasePlatform, CoverEntity, RestoreEntity):
         )
         self._attr_available = result is not None
         await self.async_update()
-        #await self.hass.async_add_executor_job(
-        #    ft.partial(self.set_cover_position, **kwargs)
-        #)
     
     async def async_added_to_hass(self) -> None:
         """Handle entity which will be added."""
         await self.async_base_added_to_hass()
         if state := await self.async_get_last_state():
-            convert = {
-                STATE_CLOSED: STATE_CLOSED_MODBUS_VALUE,
-                STATE_CLOSING: STATE_CLOSING_MODBUS_VALUE,
-                STATE_OPENING: STATE_OPENING_MODBUS_VALUE,
-                STATE_OPEN: STATE_OPEN_MODBUS_VALUE,
-                STATE_UNAVAILABLE: None,
-                STATE_UNKNOWN: None,
-            }
-            self._set_attr_state(convert[state.state])
+            self._set_attr_state(STATE_CONVERT[state.state])
     
     def _set_attr_state(self, value: str | bool | int) -> None:
         """Convert received value to HA state."""
         self._attr_is_opening = value == STATE_OPENING_MODBUS_VALUE
         self._attr_is_closing = value == STATE_CLOSING_MODBUS_VALUE
         self._attr_is_closed = value == STATE_CLOSED_MODBUS_VALUE
-    
-#    def convert_modbus_status_to_state(self, value: int) -> str | None:
-#        if value == STATE_CLOSED_MODBUS_VALUE:
-#            return STATE_CLOSED
-#        elif value == STATE_OPEN_MODBUS_VALUE:
-#            return STATE_OPEN
-#        elif value == STATE_OPENING_MODBUS_VALUE:
-#            return STATE_OPENING
-#        elif value == STATE_CLOSING_MODBUS_VALUE:
-#            return STATE_CLOSING
-#        else:
-#            return None
 
     async def async_update(self, now: datetime | None = None) -> None:
         """Update the state of the cover."""
@@ -261,12 +223,21 @@ class ModbusBlinderComponentCover(BasePlatform, CoverEntity, RestoreEntity):
 
         #current position
         self._attr_current_cover_position = (int(result.registers[0]) & 0x00FF)
+        #last status
+        self._attr_last_state = (int((result.registers[0]) >> 12) & 0x000F)
         #current status
-        self._set_attr_state(int(result.registers[0]) >> 8)
+        self._set_attr_state(int((result.registers[0]) >> 8) & 0x000F)
+
+        self._attr_extra_state_attributes = {
+            ATTR_LAST_STATE: STATUS_STATES_ARR[self._attr_last_state]
+        }
+
         #current setpoint
         self._attr_setpoint_cover_position = (int(result.registers[1]) & 0x00FF)
 
         self.schedule_update_ha_state()
         
-        _LOGGER.debug(f"{self._name}-> Current position: {self._attr_current_cover_position}; Setpoint position: {self._attr_setpoint_cover_position}; State: {self._state}")
+        _LOGGER.debug(f"{self._name}-> Current position: {self._attr_current_cover_position}; Setpoint position: {self._attr_setpoint_cover_position}; State: {self.state}")
         _LOGGER.debug(f"{self._name}-> State opening: {self._attr_is_opening}; State closing: {self._attr_is_closing}; State closed: {self._attr_is_closed}")
+        _LOGGER.debug(f"{self._name}-> Last state is: {self._attr_last_state}")
+
