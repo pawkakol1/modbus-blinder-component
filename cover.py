@@ -1,6 +1,7 @@
 """Get station's air quality informations"""
 from __future__ import annotations
 
+import asyncio
 import logging
 
 import functools as ft
@@ -29,7 +30,10 @@ from homeassistant.components.modbus.const import (
     CALL_TYPE_REGISTER_HOLDING,
     CALL_TYPE_WRITE_REGISTER,
 )
-from homeassistant.components.modbus.modbus import ModbusHub
+from homeassistant.components.modbus.modbus import (
+    async_modbus_setup,
+    ModbusHub
+) 
     
 
 from homeassistant.const import (
@@ -64,6 +68,8 @@ from .const import (
     STATE_OPEN_MODBUS_VALUE,
     STATE_OPENING_MODBUS_VALUE,
     STATE_CLOSING_MODBUS_VALUE,
+    TIME_FOR_FIRST_CONNECT_TRY_WITH_HUB_IN_SECONS,
+    TIME_FOR_NEXTS_CONNECT_TRIES_WITH_HUB_IN_MINUTES,
 )
 PARALLEL_UPDATES = 1
 
@@ -71,9 +77,19 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> bool:
-
+    hub: ModbusHub | None = None
     #Get modbus hub created in configuration.yaml using its name
-    hub: ModbusHub = get_hub(hass, entry.data[CONF_HUB_NAME])
+    _LOGGER.debug(f"Setup entry - version {SW_VERSION}")
+    _LOGGER.debug(f"Remembered HUB name: {entry.data[CONF_HUB_NAME]}")
+    waitTime = TIME_FOR_FIRST_CONNECT_TRY_WITH_HUB_IN_SECONS
+    while(hub is None):
+        try:
+            hub = get_hub(hass, entry.data[CONF_HUB_NAME])
+        except:
+            _LOGGER.warning(f"Modbus HUB named {entry.data[CONF_HUB_NAME]} hasn't started yet. Waiting {waitTime} seconds for next try...")
+            await asyncio.sleep(waitTime)
+            waitTime = TIME_FOR_NEXTS_CONNECT_TRIES_WITH_HUB_IN_MINUTES * 60
+    
     entities = []
     _LOGGER.debug(f"Got HUB: {hub.name}")
     entities.append(ModbusBlinderComponentCover(hub, entry.data))
@@ -105,8 +121,7 @@ class ModbusBlinderComponentCover(BasePlatform, CoverEntity, RestoreEntity):
         self._input_type = CALL_TYPE_REGISTER_HOLDING
         self._write_type = CALL_TYPE_WRITE_REGISTER
         self._address = config[CONF_ADDRESS]
-        self._address_setpoint = self._address + 1
-        self._address_updown = self._address + 2
+        self._address_control = self._address + 1
 
         #name
         if config[CONF_NAME]:
@@ -148,36 +163,36 @@ class ModbusBlinderComponentCover(BasePlatform, CoverEntity, RestoreEntity):
 
     async def async_open_cover(self, **kwargs: Any) -> None:
         """Open cover."""
-        _LOGGER.debug(f"Write Holding Register address: {self._address_updown}, with value: {COMMAND_OPEN_VALUE}")
+        _LOGGER.debug(f"Write Holding Register address: {(self._address_control)}, with value: {COMMAND_OPEN_VALUE}")
         result = await self._hub.async_pymodbus_call(
-            self._slave, self._address_updown, COMMAND_OPEN_VALUE, self._write_type
+            self._slave, (self._address_control), (int(COMMAND_OPEN_VALUE) << 8) | int(self._attr_setpoint_cover_position), self._write_type
         )
         self._attr_available = result is not None
         await self.async_update()
 
     async def async_close_cover(self, **kwargs: Any) -> None:
         """Close cover."""
-        _LOGGER.debug(f"Write Holding Register address: {self._address_updown}, with value: {COMMAND_CLOSE_VALUE}")
+        _LOGGER.debug(f"Write Holding Register address: {(self._address_control)}, with value: {COMMAND_CLOSE_VALUE}")
         result = await self._hub.async_pymodbus_call(
-            self._slave, self._address_updown, COMMAND_CLOSE_VALUE, self._write_type
+            self._slave, (self._address_control), (int(COMMAND_CLOSE_VALUE) << 8) | int(self._attr_setpoint_cover_position), self._write_type
         )
         self._attr_available = result is not None
         await self.async_update()
 
     async def async_stop_cover(self, **kwargs: Any) -> None:
         """Stop the cover."""
-        _LOGGER.debug(f"Write Holding Register address: {self._address_updown}, with value: {COMMAND_CLOSE_VALUE}")
+        _LOGGER.debug(f"Write Holding Register address: {self._address_control}, with value: {COMMAND_CLOSE_VALUE}")
         result = await self._hub.async_pymodbus_call(
-            self._slave, self._address_updown, COMMAND_STOP_VALUE, self._write_type
+            self._slave, self._address_control, int(self._attr_setpoint_cover_position), self._write_type
         )
         self._attr_available = result is not None
         await self.async_update()
 
     async def async_set_cover_position(self, **kwargs: Any) -> None:
         """Move the cover to a specific position."""
-        _LOGGER.debug(f"Write Holding Register address: {self._address_setpoint}, with value: {kwargs[ATTR_POSITION]}")
+        _LOGGER.debug(f"Write Holding Register address: {self._address_control}, with value: {kwargs[ATTR_POSITION]}")
         result = await self._hub.async_pymodbus_call(
-            self._slave, self._address_setpoint, kwargs[ATTR_POSITION], self._write_type
+            self._slave, self._address_control, kwargs[ATTR_POSITION], self._write_type
         )
         self._attr_available = result is not None
         await self.async_update()
@@ -227,7 +242,7 @@ class ModbusBlinderComponentCover(BasePlatform, CoverEntity, RestoreEntity):
             return
         self._call_active = True
         result = await self._hub.async_pymodbus_call(
-            self._slave, self._address, 4, self._input_type
+            self._slave, self._address, 2, self._input_type
         )
         self._call_active = False
         _LOGGER.debug("Request sent")
@@ -239,22 +254,19 @@ class ModbusBlinderComponentCover(BasePlatform, CoverEntity, RestoreEntity):
             self._lazy_errors = self._lazy_error_count
             self._attr_available = False
             self.schedule_update_ha_state()
-            #self.async_write_ha_state()
             return
         _LOGGER.debug("Result:")
         self._lazy_errors = self._lazy_error_count
         self._attr_available = True
 
         #current position
-        self._attr_current_cover_position = int(result.registers[0])
+        self._attr_current_cover_position = (int(result.registers[0]) & 0x00FF)
+        #current status
+        self._set_attr_state(int(result.registers[0]) >> 8)
         #current setpoint
-        self._attr_setpoint_cover_position = int(result.registers[1])
+        self._attr_setpoint_cover_position = (int(result.registers[1]) & 0x00FF)
 
-        self._set_attr_state(int(result.registers[3]))
-        #self._set_attr_state(self.convert_modbus_status_to_state(int(result.registers[3])))
         self.schedule_update_ha_state()
-        #self.async_write_ha_state()
-        #_LOGGER.debug(f"{self._name}-> Current position: {self._attr_current_cover_position}; Setpoint position: {self._attr_setpoint_cover_position}; State: {self._state}")
-        _LOGGER.debug(f"{self._name}-> Current position: {self._attr_current_cover_position}; Setpoint position: {self._attr_setpoint_cover_position}; State: {result.registers[3]}")
+        
+        _LOGGER.debug(f"{self._name}-> Current position: {self._attr_current_cover_position}; Setpoint position: {self._attr_setpoint_cover_position}; State: {self._state}")
         _LOGGER.debug(f"{self._name}-> State opening: {self._attr_is_opening}; State closing: {self._attr_is_closing}; State closed: {self._attr_is_closed}")
-        _LOGGER.debug(f"{self._name}-> State opening: {self.is_opening}; State closing: {self.is_closing}; State closed: {self.is_closed}")
