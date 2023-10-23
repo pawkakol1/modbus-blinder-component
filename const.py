@@ -17,7 +17,7 @@ from homeassistant.const import (
 
 DOMAIN = "modbus_blinder_component"
 PLATFORMS = [Platform.COVER]
-SW_VERSION = "0.1.10"
+SW_VERSION = "0.2.17"
 
 ATTR_CONTROL_UP_DOWN_ADDRESS: Final = "control_up_down_address"
 ATTR_CURRENT_COVER_POSITION: Final = "current_cover_position"
@@ -25,7 +25,10 @@ ATTR_CURRENT_POSITION_ADDRESS: Final = "current_position_address"
 ATTR_LAST_STATE: Final = "last_state"
 ATTR_SETPOINT_COVER_POSITION: Final = "setpoint_cover_position"
 ATTR_SETPOINT_POSITION_ADDRESS: Final = "setpoint_position_address"
+
 CONF_HUB_NAME: Final = "hub_name"
+CONF_INIT: Final = "init"
+CONF_USER: Final = "user"
 
 DEFAULT_NAME = 'blinder'
 

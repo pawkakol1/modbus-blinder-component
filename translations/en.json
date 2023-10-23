@@ -3,14 +3,58 @@
     "error": {},
     "step": {
       "user": {
-        "title": "Put data for Modbus blinder",
-        "description": "Choose station adding method WAQI, what you preffered: using geographic localization or using station ID",
+        "title": "Add new device - Modbus Blinder Component",
+        "description": "Please put data for new device of Modbus Blinder Component integration.",
         "data": {
           "name": "Name",
           "hub_name": "Hub name",
           "slave": "Unit address",
           "scan_interval": "Scan interval",
-          "address": "Holding Register of current position"
+          "address": "Holding Register address of current position"
+        }
+      }
+    }
+  },
+  "options": {
+    "abort": {
+      "already_configured": "Device has already been configured.",
+      "device_success": "Device successfully added/edited.",
+      "no_entities": "Cannot remove all entities from a device.\nIf you want to delete a device, enter it in the Devices menu, click the 3 dots in the 'Device info' frame, and press the Delete button."
+    },
+    "error": {},
+    "step": {
+      "init": {
+        "title": "Modbus Blinder Component configuration",
+        "description": "Please select and confirm your choice.",
+        "data": {
+          "add_new_device": "Add new device",
+          "edit_device_options": "Edit device options"
+        }
+      },
+      "add_new_device": {
+        "title": "Add new device - Modbus Blinder Component",
+        "description": "Please put data for new device of Modbus Blinder Component integration.",
+        "data": {
+          "name": "Name",
+          "hub_name": "Hub name",
+          "slave": "Unit address",
+          "scan_interval": "Scan interval",
+          "address": "Holding Register address of current position"
+        }
+      },
+      "edit_device_selection": {
+        "title": "Edit device selection - Modbus Blinder Component",
+        "description": "Please choose device, which has to be editted."
+      },
+      "edit_device_options": {
+        "title": "Edit device options - Modbus Blinder Component",
+        "description": "Please put new data for existed device of Modbus Blinder Component integration.",
+        "data": {
+          "name": "Name",
+          "hub_name": "Hub name",
+          "slave": "Unit address",
+          "scan_interval": "Scan interval",
+          "address": "Holding Register address of current position"
         }
       }
     }
