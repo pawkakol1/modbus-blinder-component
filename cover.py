@@ -112,6 +112,7 @@ class ModbusBlinderComponentCover(BasePlatform, CoverEntity, RestoreEntity):
         self._attr_is_closed = False
 
         #Modbus parameters
+        self._hub = hub
         self._hub_name = config[CONF_HUB_NAME]
         self._input_type = CALL_TYPE_REGISTER_HOLDING
         self._write_type = CALL_TYPE_WRITE_REGISTER
@@ -149,7 +150,7 @@ class ModbusBlinderComponentCover(BasePlatform, CoverEntity, RestoreEntity):
     async def async_open_cover(self, **kwargs: Any) -> None:
         """Open cover."""
         _LOGGER.debug(f"Write Holding Register address: {(self._address_control)}, with value: {COMMAND_OPEN_VALUE}")
-        result = await self._hub.async_pymodbus_call(
+        result = await self._hub.async_pb_call(
             self._slave, (self._address_control), (int(COMMAND_OPEN_VALUE) << 8) | int(self._attr_setpoint_cover_position), self._write_type
         )
         self._attr_available = result is not None
@@ -158,7 +159,7 @@ class ModbusBlinderComponentCover(BasePlatform, CoverEntity, RestoreEntity):
     async def async_close_cover(self, **kwargs: Any) -> None:
         """Close cover."""
         _LOGGER.debug(f"Write Holding Register address: {(self._address_control)}, with value: {COMMAND_CLOSE_VALUE}")
-        result = await self._hub.async_pymodbus_call(
+        result = await self._hub.async_pb_call(
             self._slave, (self._address_control), (int(COMMAND_CLOSE_VALUE) << 8) | int(self._attr_setpoint_cover_position), self._write_type
         )
         self._attr_available = result is not None
@@ -167,7 +168,7 @@ class ModbusBlinderComponentCover(BasePlatform, CoverEntity, RestoreEntity):
     async def async_stop_cover(self, **kwargs: Any) -> None:
         """Stop the cover."""
         _LOGGER.debug(f"Write Holding Register address: {self._address_control}, with value: {COMMAND_CLOSE_VALUE}")
-        result = await self._hub.async_pymodbus_call(
+        result = await self._hub.async_pb_call(
             self._slave, self._address_control, int(self._attr_setpoint_cover_position), self._write_type
         )
         self._attr_available = result is not None
@@ -176,7 +177,7 @@ class ModbusBlinderComponentCover(BasePlatform, CoverEntity, RestoreEntity):
     async def async_set_cover_position(self, **kwargs: Any) -> None:
         """Move the cover to a specific position."""
         _LOGGER.debug(f"Write Holding Register address: {self._address_control}, with value: {kwargs[ATTR_POSITION]}")
-        result = await self._hub.async_pymodbus_call(
+        result = await self._hub.async_pb_call(
             self._slave, self._address_control, kwargs[ATTR_POSITION], self._write_type
         )
         self._attr_available = result is not None
@@ -203,9 +204,10 @@ class ModbusBlinderComponentCover(BasePlatform, CoverEntity, RestoreEntity):
         if self._call_active:
             return
         self._call_active = True
-        result = await self._hub.async_pymodbus_call(
-            self._slave, self._address, 2, self._input_type
+        result = await self._hub.async_pb_call(
+            self._slave, self._address, int(2), self._input_type
         )
+        
         self._call_active = False
         _LOGGER.debug("Request sent")
         if result is None:
