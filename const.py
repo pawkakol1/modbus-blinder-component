@@ -17,7 +17,7 @@ from homeassistant.const import (
 
 DOMAIN = "modbus_blinder_component"
 PLATFORMS = [Platform.COVER]
-SW_VERSION = "0.2.17"
+SW_VERSION = "0.2.18"
 
 ATTR_CONTROL_UP_DOWN_ADDRESS: Final = "control_up_down_address"
 ATTR_CURRENT_COVER_POSITION: Final = "current_cover_position"
