@@ -16,43 +16,28 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from homeassistant.components.cover import (
-    ATTR_CURRENT_POSITION,
     ATTR_POSITION,
     CoverEntity, 
-    CoverEntityFeature,
+    CoverEntityFeature
 )
 from homeassistant.components.modbus import get_hub
 from homeassistant.components.modbus.base_platform import BasePlatform
 from homeassistant.components.modbus.const import (
-    CONF_DATA_TYPE,
-    CONF_INPUT_TYPE,
-    CONF_WRITE_TYPE,
     CALL_TYPE_REGISTER_HOLDING,
-    CALL_TYPE_WRITE_REGISTER,
+    CALL_TYPE_WRITE_REGISTER
 )
 from homeassistant.components.modbus.modbus import (
-    async_modbus_setup,
     ModbusHub
 ) 
     
 
 from homeassistant.const import (
     CONF_ADDRESS,
-    CONF_COVERS,
-    CONF_DEVICE_CLASS,
-    CONF_NAME,
-    CONF_SCAN_INTERVAL,
-    CONF_SLAVE,
-    STATE_UNKNOWN,
+    CONF_NAME
 )
 
 from .const import (
-    ATTR_CONTROL_UP_DOWN_ADDRESS,
-    ATTR_CURRENT_POSITION_ADDRESS,
     ATTR_LAST_STATE,
-    ATTR_SETPOINT_COVER_POSITION,
-    ATTR_SETPOINT_POSITION_ADDRESS,
-    COMMAND_STOP_VALUE,
     COMMAND_OPEN_VALUE,
     COMMAND_CLOSE_VALUE,
     CONF_HUB_NAME,
@@ -61,7 +46,6 @@ from .const import (
     DEFAULT_NAME,
     SW_VERSION,
     STATE_CLOSED_MODBUS_VALUE,
-    STATE_OPEN_MODBUS_VALUE,
     STATE_OPENING_MODBUS_VALUE,
     STATE_CLOSING_MODBUS_VALUE,
     STATUS_STATES_ARR,
@@ -72,6 +56,26 @@ PARALLEL_UPDATES = 1
 
 _LOGGER = logging.getLogger(__name__)
 
+async def async_setup_platform(
+    hass: HomeAssistant,
+    config: ConfigType,
+    async_add_devices: AddEntitiesCallback,
+    discovery_info: DiscoveryInfoType | None = None,
+) -> None:
+    """Set up the Modbus Blinder Component covers"""
+    _LOGGER.warning(
+        "Configuration of the Modbus Blinder Component platform in YAML is deprecated and will be "
+        "removed in Home Assistant 2022.4; Your existing configuration "
+        "has been imported into the UI automatically and can be safely removed "
+        "from your configuration.yaml file"
+    )
+    hass.async_create_task(
+        hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": SOURCE_IMPORT},
+            data=config,
+        )
+    )
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> bool:
     hub: ModbusHub | None = None
@@ -89,7 +93,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     
     entities = []
     _LOGGER.debug(f"Got HUB: {hub.name}")
-    entities.append(ModbusBlinderComponentCover(hub, entry.data))
+    _LOGGER.debug(f"Entry data: {entry.data}")
+    entities.append(ModbusBlinderComponentCover(hass, hub, entry.data))
     _LOGGER.debug(f"Create Modbus blinder entry for: {entry.data[CONF_HUB_NAME]}")
     
 
@@ -105,8 +110,8 @@ class ModbusBlinderComponentCover(BasePlatform, CoverEntity, RestoreEntity):
     _attr_setpoint_cover_position: int | None = None
 
 
-    def __init__(self, hub: ModbusHub, config: dict[str, Any]) -> None:
-        super().__init__(hub, config)
+    def __init__(self, hass: HomeAssistant, hub: ModbusHub, config: dict[str, Any]) -> None:
+        super().__init__(hass, hub, config)
 
         #states
         self._attr_is_closed = False
@@ -212,15 +217,10 @@ class ModbusBlinderComponentCover(BasePlatform, CoverEntity, RestoreEntity):
         _LOGGER.debug("Request sent")
         if result is None:
             _LOGGER.debug("No result:")
-            if self._lazy_errors:
-                self._lazy_errors -= 1
-                return
-            self._lazy_errors = self._lazy_error_count
             self._attr_available = False
             self.schedule_update_ha_state()
             return
         _LOGGER.debug("Result:")
-        self._lazy_errors = self._lazy_error_count
         self._attr_available = True
 
         #current position
